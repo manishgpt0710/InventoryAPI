@@ -1,4 +1,5 @@
 using InventoryWebApi.Infrastructure;
+using InventoryWebApi.Application.Services;
 using Microsoft.OpenApi.Models;
 using System.Text.Json.Serialization;
 
@@ -24,6 +25,7 @@ builder.Services.AddControllers()
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                       ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.AddInfrastructure(connectionString);
+builder.Services.AddScoped<IProductService, ProductService>();
 
 builder.Services.AddEndpointsApiExplorer();
 

@@ -1,7 +1,6 @@
 using InventoryWebApi.Domain.Entities;
-using InventoryWebApi.Infrastructure.Persistence;
+using InventoryWebApi.Application.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace InventoryWebApi.Api.Controllers;
 
@@ -9,25 +8,24 @@ namespace InventoryWebApi.Api.Controllers;
 [Route("api/[controller]")]
 public class ProductsController : ControllerBase
 {
-    private readonly ApplicationDbContext _dbContext;
+    private readonly IProductService _productService;
 
-    public ProductsController(ApplicationDbContext dbContext)
+    public ProductsController(IProductService productService)
     {
-        _dbContext = dbContext;
+        _productService = productService;
     }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Product>>> GetAll(CancellationToken cancellationToken)
     {
-        var products = await _dbContext.Products.AsNoTracking().ToListAsync(cancellationToken);
+        var products = await _productService.GetAllAsync(cancellationToken);
         return Ok(products);
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<Product>> GetById(int id, CancellationToken cancellationToken)
     {
-        var product = await _dbContext.Products.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var product = await _productService.GetByIdAsync(id, cancellationToken);
 
         if (product is null)
         {
@@ -42,10 +40,9 @@ public class ProductsController : ControllerBase
     {
         product.CreatedAt = DateTime.UtcNow;
 
-        _dbContext.Products.Add(product);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        var created = await _productService.CreateAsync(product, cancellationToken);
 
-        return CreatedAtAction(nameof(GetById), new { id = product.Id }, product);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
     [HttpPut("{id:int}")]
@@ -56,7 +53,7 @@ public class ProductsController : ControllerBase
             return BadRequest("Route id and body ProductId must match.");
         }
 
-        var existing = await _dbContext.Products.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var existing = await _productService.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return NotFound();
@@ -73,7 +70,7 @@ public class ProductsController : ControllerBase
         existing.Tax = product.Tax;
         existing.UpdatedAt = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _productService.UpdateAsync(existing, cancellationToken);
 
         return NoContent();
     }
@@ -81,14 +78,13 @@ public class ProductsController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        var existing = await _dbContext.Products.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var existing = await _productService.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return NotFound();
         }
 
-        _dbContext.Products.Remove(existing);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _productService.DeleteAsync(id, cancellationToken);
 
         return NoContent();
     }
