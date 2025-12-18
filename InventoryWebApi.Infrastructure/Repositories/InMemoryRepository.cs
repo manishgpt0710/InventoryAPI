@@ -4,6 +4,9 @@ namespace InventoryWebApi.Infrastructure.Repositories;
 
 public class InMemoryRepository<T> : IRepository<T> where T : class
 {
+    private const int DefaultPageSize = 50;
+    private const int MaxPageSize = 200;
+
     private readonly Dictionary<int, T> _store = new();
     private readonly Func<T, int> _getId;
     private readonly Action<T, int> _setId;
@@ -20,10 +23,38 @@ public class InMemoryRepository<T> : IRepository<T> where T : class
         return Task.FromResult(entity);
     }
 
-    public Task<IReadOnlyList<T>> GetAllAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<T>> GetAllAsync(int? pageNumber = 1, int? pageSize = DefaultPageSize, CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<T> result = _store.Values.ToList();
-        return Task.FromResult(result);
+        var result = _store.Values
+            .OrderBy(_getId)
+            .ToList();
+
+        if (pageNumber.HasValue || pageSize.HasValue)
+        {
+            var normalizedPageNumber = pageNumber.GetValueOrDefault(1);
+            if (normalizedPageNumber < 1)
+            {
+                normalizedPageNumber = 1;
+            }
+
+            var normalizedPageSize = pageSize.GetValueOrDefault(DefaultPageSize);
+            if (normalizedPageSize < 1)
+            {
+                normalizedPageSize = DefaultPageSize;
+            }
+
+            if (normalizedPageSize > MaxPageSize)
+            {
+                normalizedPageSize = MaxPageSize;
+            }
+
+            result = result
+                .Skip((normalizedPageNumber - 1) * normalizedPageSize)
+                .Take(normalizedPageSize)
+                .ToList();
+        }
+
+        return Task.FromResult<IReadOnlyList<T>>(result);
     }
 
     public Task<T> AddAsync(T entity, CancellationToken cancellationToken = default)

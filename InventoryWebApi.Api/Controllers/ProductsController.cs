@@ -8,24 +8,24 @@ namespace InventoryWebApi.Api.Controllers;
 [Route("api/[controller]")]
 public class ProductsController : ControllerBase
 {
-    private readonly IProductService _productService;
+    private readonly IGenericService<Product> _genericService;
 
-    public ProductsController(IProductService productService)
+    public ProductsController(IGenericService<Product> genericService)
     {
-        _productService = productService;
+        _genericService = genericService;
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Product>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<Product>>> GetAll(int? pageNumber, int? pageSize, CancellationToken cancellationToken)
     {
-        var products = await _productService.GetAllAsync(cancellationToken);
+        var products = await _genericService.GetAllAsync(pageNumber, pageSize, cancellationToken);
         return Ok(products);
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<Product>> GetById(int id, CancellationToken cancellationToken)
     {
-        var product = await _productService.GetByIdAsync(id, cancellationToken);
+        var product = await _genericService.GetByIdAsync(id, cancellationToken);
 
         if (product is null)
         {
@@ -38,9 +38,7 @@ public class ProductsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Product>> Create(Product product, CancellationToken cancellationToken)
     {
-        product.CreatedAt = DateTime.UtcNow;
-
-        var created = await _productService.CreateAsync(product, cancellationToken);
+        var created = await _genericService.CreateAsync(product, cancellationToken);
 
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
@@ -53,7 +51,7 @@ public class ProductsController : ControllerBase
             return BadRequest("Route id and body ProductId must match.");
         }
 
-        var existing = await _productService.GetByIdAsync(id, cancellationToken);
+        var existing = await _genericService.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return NotFound();
@@ -68,9 +66,8 @@ public class ProductsController : ControllerBase
         existing.IsBundled = product.IsBundled;
         existing.Rate = product.Rate;
         existing.Tax = product.Tax;
-        existing.UpdatedAt = DateTime.UtcNow;
 
-        await _productService.UpdateAsync(existing, cancellationToken);
+        await _genericService.UpdateAsync(existing, cancellationToken);
 
         return NoContent();
     }
@@ -78,13 +75,13 @@ public class ProductsController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        var existing = await _productService.GetByIdAsync(id, cancellationToken);
+        var existing = await _genericService.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return NotFound();
         }
 
-        await _productService.DeleteAsync(id, cancellationToken);
+        await _genericService.DeleteAsync(id, cancellationToken);
 
         return NoContent();
     }

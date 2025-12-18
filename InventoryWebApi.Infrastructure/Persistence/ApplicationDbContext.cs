@@ -16,6 +16,41 @@ public class ApplicationDbContext : DbContext
     public DbSet<LookupGroup> LookupGroups => Set<LookupGroup>();
     public DbSet<LookupItem> LookupItems => Set<LookupItem>();
 
+    public override int SaveChanges()
+    {
+        ApplyAuditInformation();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ApplyAuditInformation();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ApplyAuditInformation()
+    {
+        var utcNow = DateTime.UtcNow;
+
+        foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
+        {
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    // Enforce server-side audit values (ignore any request payload values)
+                    entry.Property(x => x.CreatedAt).CurrentValue = utcNow;
+                    entry.Property(x => x.UpdatedAt).CurrentValue = null;
+                    break;
+
+                case EntityState.Modified:
+                    // Never allow CreatedAt to be changed once persisted
+                    entry.Property(x => x.CreatedAt).IsModified = false;
+                    entry.Property(x => x.UpdatedAt).CurrentValue = utcNow;
+                    break;
+            }
+        }
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

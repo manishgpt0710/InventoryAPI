@@ -1,41 +1,26 @@
+using InventoryWebApi.Application.Services;
 using InventoryWebApi.Domain.Entities;
-using InventoryWebApi.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace InventoryWebApi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class WarehouseInventoriesController : ControllerBase
+public class WarehouseInventoriesController(IGenericService<WarehouseInventory> genericService) : ControllerBase
 {
-    private readonly ApplicationDbContext _dbContext;
-
-    public WarehouseInventoriesController(ApplicationDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
+    private readonly IGenericService<WarehouseInventory> _genericService = genericService;
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<WarehouseInventory>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<WarehouseInventory>>> GetAll(int? pageNumber, int? pageSize, CancellationToken cancellationToken)
     {
-        var inventories = await _dbContext.WarehouseInventories
-            .AsNoTracking()
-            .Include(wi => wi.Product)
-            .Include(wi => wi.Warehouse)
-            .ToListAsync(cancellationToken);
-
+        var inventories = await _genericService.GetAllAsync(pageNumber, pageSize, cancellationToken);
         return Ok(inventories);
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<WarehouseInventory>> GetById(int id, CancellationToken cancellationToken)
     {
-        var inventory = await _dbContext.WarehouseInventories
-            .AsNoTracking()
-            .Include(wi => wi.Product)
-            .Include(wi => wi.Warehouse)
-            .FirstOrDefaultAsync(wi => wi.Id == id, cancellationToken);
+        var inventory = await _genericService.GetByIdAsync(id, cancellationToken);
 
         if (inventory is null)
         {
@@ -48,12 +33,9 @@ public class WarehouseInventoriesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<WarehouseInventory>> Create(WarehouseInventory inventory, CancellationToken cancellationToken)
     {
-        inventory.CreatedAt = DateTime.UtcNow;
+        var created = await _genericService.CreateAsync(inventory, cancellationToken);
 
-        _dbContext.WarehouseInventories.Add(inventory);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        return CreatedAtAction(nameof(GetById), new { id = inventory.Id }, inventory);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
     [HttpPut("{id:int}")]
@@ -64,7 +46,7 @@ public class WarehouseInventoriesController : ControllerBase
             return BadRequest("Route id and body Id must match.");
         }
 
-        var existing = await _dbContext.WarehouseInventories.FirstOrDefaultAsync(wi => wi.Id == id, cancellationToken);
+        var existing = await _genericService.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return NotFound();
@@ -76,9 +58,8 @@ public class WarehouseInventoriesController : ControllerBase
         existing.AvailableQty = inventory.AvailableQty;
         existing.ReservedQty = inventory.ReservedQty;
         existing.BlockedQty = inventory.BlockedQty;
-        existing.UpdatedAt = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _genericService.UpdateAsync(existing, cancellationToken);
 
         return NoContent();
     }
@@ -86,14 +67,13 @@ public class WarehouseInventoriesController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        var existing = await _dbContext.WarehouseInventories.FirstOrDefaultAsync(wi => wi.Id == id, cancellationToken);
+        var existing = await _genericService.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return NotFound();
         }
 
-        _dbContext.WarehouseInventories.Remove(existing);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _genericService.DeleteAsync(id, cancellationToken);
 
         return NoContent();
     }

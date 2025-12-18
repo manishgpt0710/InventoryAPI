@@ -1,40 +1,26 @@
+using InventoryWebApi.Application.Services;
 using InventoryWebApi.Domain.Entities;
-using InventoryWebApi.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace InventoryWebApi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class LookupGroupsController : ControllerBase
+public class LookupGroupsController(IGenericService<LookupGroup> genericService) : ControllerBase
 {
-    private readonly ApplicationDbContext _dbContext;
-
-    public LookupGroupsController(ApplicationDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
+    private readonly IGenericService<LookupGroup> _genericService = genericService;
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<LookupGroup>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<LookupGroup>>> GetAll(int? pageNumber, int? pageSize, CancellationToken cancellationToken)
     {
-        var groups = await _dbContext.LookupGroups
-            .AsNoTracking()
-            .Include(g => g.Items)
-            .ToListAsync(cancellationToken);
-
+        var groups = _genericService.GetAllAsync(pageNumber, pageSize, cancellationToken);
         return Ok(groups);
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<LookupGroup>> GetById(int id, CancellationToken cancellationToken)
     {
-        var group = await _dbContext.LookupGroups
-            .AsNoTracking()
-            .Include(g => g.Items)
-            .FirstOrDefaultAsync(g => g.Id == id, cancellationToken);
-
+        var group = await _genericService.GetByIdAsync(id, cancellationToken);
         if (group is null)
         {
             return NotFound();
@@ -46,10 +32,9 @@ public class LookupGroupsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<LookupGroup>> Create(LookupGroup group, CancellationToken cancellationToken)
     {
-        _dbContext.LookupGroups.Add(group);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        var created = await _genericService.CreateAsync(group, cancellationToken);
 
-        return CreatedAtAction(nameof(GetById), new { id = group.Id }, group);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
     [HttpPut("{id:int}")]
@@ -60,7 +45,7 @@ public class LookupGroupsController : ControllerBase
             return BadRequest("Route id and body Id must match.");
         }
 
-        var existing = await _dbContext.LookupGroups.FirstOrDefaultAsync(g => g.Id == id, cancellationToken);
+        var existing = await _genericService.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return NotFound();
@@ -69,7 +54,7 @@ public class LookupGroupsController : ControllerBase
         existing.Name = group.Name;
         existing.Description = group.Description;
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _genericService.UpdateAsync(existing, cancellationToken);
 
         return NoContent();
     }
@@ -77,15 +62,13 @@ public class LookupGroupsController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        var existing = await _dbContext.LookupGroups.FirstOrDefaultAsync(g => g.Id == id, cancellationToken);
+        var existing = await _genericService.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return NotFound();
         }
 
-        _dbContext.LookupGroups.Remove(existing);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
+        await _genericService.DeleteAsync(id, cancellationToken);
         return NoContent();
     }
 }

@@ -2,6 +2,7 @@ using InventoryWebApi.Infrastructure;
 using InventoryWebApi.Application.Services;
 using Microsoft.OpenApi.Models;
 using System.Text.Json.Serialization;
+using InventoryWebApi.Domain.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,7 +26,11 @@ builder.Services.AddControllers()
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                       ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.AddInfrastructure(connectionString);
-builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IGenericService<LookupGroup>, GenericService<LookupGroup>>();
+builder.Services.AddScoped<IGenericService<LookupItem>, GenericService<LookupItem>>();
+builder.Services.AddScoped<IGenericService<Product>, GenericService<Product>>();
+builder.Services.AddScoped<IGenericService<WarehouseInventory>, GenericService<WarehouseInventory>>();
+builder.Services.AddScoped<IGenericService<Warehouse>, GenericService<Warehouse>>();
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -59,7 +64,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    
+
     // Enable Swagger UI
     app.UseSwagger();
     app.UseSwaggerUI(options =>

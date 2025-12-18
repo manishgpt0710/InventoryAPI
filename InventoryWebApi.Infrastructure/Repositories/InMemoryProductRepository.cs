@@ -3,7 +3,7 @@ using InventoryWebApi.Domain.Entities;
 
 namespace InventoryWebApi.Infrastructure.Repositories;
 
-public class InMemoryProductRepository : InMemoryRepository<Product>, IProductRepository
+public class InMemoryProductRepository : InMemoryRepository<Product>, IRepository<Product>
 {
     public InMemoryProductRepository()
         : base(p => p.Id, (p, id) => p.Id = id)

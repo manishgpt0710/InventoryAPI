@@ -3,9 +3,9 @@ using InventoryWebApi.Infrastructure.Persistence;
 
 namespace InventoryWebApi.Infrastructure.Repositories;
 
-public class EfProductRepository : EfRepository<Product>
+public sealed class EfWarehouseRepository : EfRepository<Warehouse>
 {
-    public EfProductRepository(ApplicationDbContext dbContext)
+    public EfWarehouseRepository(ApplicationDbContext dbContext)
         : base(dbContext)
     {
     }
