@@ -1,0 +1,44 @@
+# Ignore Visual Studio files
+.vs/
+*.user
+*.suo
+*.sln.docstates
+
+# Ignore build outputs
+bin/
+obj/
+
+# Ignore temporary files
+*.log
+*.lock.json
+
+# Ignore Publish folder
+Publish/
+
+# Ignore NuGet Packages
+*.nuget.props
+*.nupkg
+packages/
+
+# Ignore user secrets
+**/secrets.json
+*.secrets.json
+
+# Ignore Azure Web App publish settings
+PublishScripts/
+deploy.cmd
+
+# Ignore roslyn cache
+artifacts/
+
+# Ignore DotNet specific temporary files
+project.lock.json
+project.fragment.lock.json
+artifacts/Release/
+artifacts/Debug/
+project.json
+
+# Ignore Coverage in Testing Artifacts
+.coverage
+
+**/*.md
