@@ -1,4 +1,4 @@
-using InventoryWebApi.Application.Services;
+using InventoryWebApi.Application.Interfaces;
 using InventoryWebApi.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 

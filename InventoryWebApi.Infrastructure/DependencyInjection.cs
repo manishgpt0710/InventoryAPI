@@ -14,11 +14,7 @@ public static class DependencyInjection
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(connectionString));
 
-        services.AddScoped<IRepository<Product>, EfProductRepository>();
-        services.AddScoped<IRepository<LookupGroup>, EfLookupGroupRepository>();
-        services.AddScoped<IRepository<LookupItem>, EfLookupItemRepository>();
-        services.AddScoped<IRepository<Warehouse>, EfWarehouseRepository>();
-        services.AddScoped<IRepository<WarehouseInventory>, EfWarehouseInventoryRepository>();
+        services.AddScoped(typeof(IRepository<>), typeof(EfRepository<>));
 
         return services;
     }

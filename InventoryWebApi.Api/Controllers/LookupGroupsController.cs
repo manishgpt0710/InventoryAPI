@@ -1,4 +1,4 @@
-using InventoryWebApi.Application.Services;
+using InventoryWebApi.Application.Interfaces;
 using InventoryWebApi.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,7 +13,7 @@ public class LookupGroupsController(IGenericService<LookupGroup> genericService)
     [HttpGet]
     public async Task<ActionResult<IEnumerable<LookupGroup>>> GetAll(int? pageNumber, int? pageSize, CancellationToken cancellationToken)
     {
-        var groups = _genericService.GetAllAsync(pageNumber, pageSize, cancellationToken);
+        var groups = await _genericService.GetAllAsync(pageNumber, pageSize, cancellationToken);
         return Ok(groups);
     }
 

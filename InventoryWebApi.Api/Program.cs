@@ -1,40 +1,13 @@
+using InventoryWebApi.Application;
 using InventoryWebApi.Infrastructure;
-using InventoryWebApi.Application.Services;
 using Microsoft.OpenApi.Models;
+using System.Text.Json;
 using System.Text.Json.Serialization;
-using InventoryWebApi.Domain.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddOpenApi();
-
-// Add controllers instead of minimal APIs.
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        // Prevent "A possible object cycle was detected" when returning EF entities
-        // with bidirectional navigation properties (e.g., LookupGroup <-> LookupItem).
-        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-    })
-    .ConfigureApiBehaviorOptions(options =>
-    {
-        // Keep default behavior for now; can be customized later.
-    });
-
-// Register Infrastructure with SQL Server / EF Core.
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                      ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-builder.Services.AddInfrastructure(connectionString);
-builder.Services.AddScoped<IGenericService<LookupGroup>, GenericService<LookupGroup>>();
-builder.Services.AddScoped<IGenericService<LookupItem>, GenericService<LookupItem>>();
-builder.Services.AddScoped<IGenericService<Product>, GenericService<Product>>();
-builder.Services.AddScoped<IGenericService<WarehouseInventory>, GenericService<WarehouseInventory>>();
-builder.Services.AddScoped<IGenericService<Warehouse>, GenericService<Warehouse>>();
-
-builder.Services.AddEndpointsApiExplorer();
-
 // Add Swagger/OpenAPI services
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -58,26 +31,59 @@ builder.Services.AddSwaggerGen(options =>
     }
 });
 
+// Add CORS services
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
+// Add controllers instead of minimal APIs.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    });
+
+// Health checks
+builder.Services.AddHealthChecks();
+
+// Register Infrastructure with SQL Server / EF Core.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                      ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+builder.Services.AddInfrastructure(connectionString);
+builder.Services.AddApplicationServices(builder.Configuration);
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Enable Swagger UI
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.MapOpenApi();
-
-    // Enable Swagger UI
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Inventory Web API v1");
-        options.RoutePrefix = string.Empty; // Set Swagger UI at the app's root
-        options.DisplayRequestDuration();
-        options.EnableTryItOutByDefault();
-    });
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Inventory Web API v1");
+    options.RoutePrefix = string.Empty; // Set Swagger UI at the app's root
+    options.DisplayRequestDuration();
+    options.EnableTryItOutByDefault();
+});
 
 app.UseHttpsRedirection();
 
+app.UseRouting();
+
+app.UseCors("AllowFrontend");
+
+// Add authentication/authorization here if needed
+// app.UseAuthentication();
+// app.UseAuthorization();
+
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.Run();

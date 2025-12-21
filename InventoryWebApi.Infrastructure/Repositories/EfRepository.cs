@@ -76,8 +76,7 @@ public class EfRepository<T> : IRepository<T> where T : class
 
     public virtual async Task UpdateAsync(T entity, CancellationToken cancellationToken = default)
     {
-        // Mark only the root entity as modified.
-        DbContext.Entry(entity).State = EntityState.Modified;
+        DbContext.Set<T>().Update(entity);
         await DbContext.SaveChangesAsync(cancellationToken);
     }
 

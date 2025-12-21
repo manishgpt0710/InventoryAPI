@@ -15,6 +15,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<WarehouseInventory> WarehouseInventories => Set<WarehouseInventory>();
     public DbSet<LookupGroup> LookupGroups => Set<LookupGroup>();
     public DbSet<LookupItem> LookupItems => Set<LookupItem>();
+    public DbSet<ProductImage> ProductImages => Set<ProductImage>();
 
     public override int SaveChanges()
     {

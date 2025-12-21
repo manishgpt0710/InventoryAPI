@@ -1,6 +1,6 @@
 using InventoryWebApi.Domain.Entities;
 
-namespace InventoryWebApi.Application.Services;
+namespace InventoryWebApi.Application.Interfaces;
 
 public interface IGenericService<T> where T : class
 {

@@ -16,6 +16,8 @@ public class Product : AuditableEntity
 
     public string ProductName { get; set; } = string.Empty;
 
+    public string ShortDescription { get; set; } = string.Empty;
+
     public string? Category { get; set; }
 
     public string? Uom { get; set; }
@@ -26,9 +28,11 @@ public class Product : AuditableEntity
 
     public bool IsBundled { get; set; }
 
-    public decimal Rate { get; set; }
+    public decimal Rate { get; set; } = 0.0m;
 
-    public decimal Tax { get; set; }
+    public decimal Tax { get; set; } = 0.0m;
+
+    public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
 
     public ICollection<WarehouseInventory> WarehouseInventories { get; set; } = new List<WarehouseInventory>();
 }

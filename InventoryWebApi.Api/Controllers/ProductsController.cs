@@ -1,6 +1,8 @@
 using InventoryWebApi.Domain.Entities;
-using InventoryWebApi.Application.Services;
 using Microsoft.AspNetCore.Mvc;
+using InventoryWebApi.Application.Interfaces;
+using InventoryWebApi.Application.Models;
+using System.Linq;
 
 namespace InventoryWebApi.Api.Controllers;
 
@@ -9,10 +11,16 @@ namespace InventoryWebApi.Api.Controllers;
 public class ProductsController : ControllerBase
 {
     private readonly IGenericService<Product> _genericService;
+    private readonly IGenericService<ProductImage> _productImageService;
+    private readonly IImageStorage _imageStorage;
 
-    public ProductsController(IGenericService<Product> genericService)
+    public ProductsController(IGenericService<Product> genericService,
+        IGenericService<ProductImage> productImageService, 
+        IImageStorage imageStorage)
     {
         _genericService = genericService;
+        _productImageService = productImageService;
+        _imageStorage = imageStorage;
     }
 
     [HttpGet]
@@ -36,17 +44,55 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Product>> Create(Product product, CancellationToken cancellationToken)
+    public async Task<ActionResult<Product>> Create([FromForm] ProductCreateDto dto, CancellationToken cancellationToken)
     {
-        var created = await _genericService.CreateAsync(product, cancellationToken);
+        string? imageUrl = null;
+        var product = new Product
+        {
+            SkuId = dto.SkuId,
+            ProductName = dto.ProductName,
+            ShortDescription = dto.ShortDescription,
+            Category = dto.Category,
+            Uom = dto.Uom,
+            IsActive = dto.IsActive,
+            ProductMetadata = dto.ProductMetadata,
+            IsBundled = dto.IsBundled,
+            Rate = dto.Rate,
+            Tax = dto.Tax,
+        };
 
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        if (dto.ImageFile is not null)
+        {
+            imageUrl = await _imageStorage.UploadAsync(dto.ImageFile, "products", cancellationToken);
+            product.Images.Add(new ProductImage
+            {
+                ImageUrl = imageUrl,
+                IsPrimary = true,
+                SortOrder = 0
+            });
+            await _productImageService.CreateAsync(product.Images.First(), cancellationToken);
+        }
+
+        try
+        {
+            var created = await _genericService.CreateAsync(product, cancellationToken);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        }
+        catch
+        {
+            // rollback uploaded file if persistence failed
+            if (imageUrl is not null)
+            {
+                await _imageStorage.DeleteAsync(imageUrl, cancellationToken);
+            }
+            throw;
+        }
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, Product product, CancellationToken cancellationToken)
+    public async Task<IActionResult> Update(int id, [FromForm] ProductUpdateDto dto, CancellationToken cancellationToken)
     {
-        if (id != product.Id)
+        if (id != dto.Id)
         {
             return BadRequest("Route id and body ProductId must match.");
         }
@@ -55,21 +101,64 @@ public class ProductsController : ControllerBase
         if (existing is null)
         {
             return NotFound();
+
         }
 
-        existing.SkuId = product.SkuId;
-        existing.ProductName = product.ProductName;
-        existing.Category = product.Category;
-        existing.Uom = product.Uom;
-        existing.IsActive = product.IsActive;
-        existing.ProductMetadata = product.ProductMetadata;
-        existing.IsBundled = product.IsBundled;
-        existing.Rate = product.Rate;
-        existing.Tax = product.Tax;
+        string? newImageUrl = null;
+        string? oldImageUrl = existing.Images.FirstOrDefault(i => i.IsPrimary)?.ImageUrl;
 
-        await _genericService.UpdateAsync(existing, cancellationToken);
+        if (dto.ImageFile is not null)
+        {
+            newImageUrl = await _imageStorage.UploadAsync(dto.ImageFile, "products", cancellationToken);
+            // unset existing primary
+            var existingPrimary = existing.Images.FirstOrDefault(i => i.IsPrimary);
+            if (existingPrimary is not null)
+            {
+                existingPrimary.IsPrimary = false;
+                await _productImageService.UpdateAsync(existingPrimary, cancellationToken);
+            }
 
-        return NoContent();
+            existing.Images.Add(new ProductImage
+            {
+                ImageUrl = newImageUrl,
+                IsPrimary = true,
+                SortOrder = 0
+            });
+            await _productImageService.UpdateAsync(existing.Images.First(), cancellationToken);
+        }
+
+        existing.SkuId = dto.SkuId;
+        existing.ProductName = dto.ProductName;
+        existing.ShortDescription = dto.ShortDescription;
+        existing.Category = dto.Category;
+        existing.Uom = dto.Uom;
+        existing.IsActive = dto.IsActive;
+        existing.ProductMetadata = dto.ProductMetadata;
+        existing.IsBundled = dto.IsBundled;
+        existing.Rate = dto.Rate;
+        existing.Tax = dto.Tax;
+
+        try
+        {
+            await _genericService.UpdateAsync(existing, cancellationToken);
+
+            if (newImageUrl is not null && !string.IsNullOrEmpty(oldImageUrl))
+            {
+                // delete old image after successful DB update
+                await _imageStorage.DeleteAsync(oldImageUrl, cancellationToken);
+            }
+
+            return NoContent();
+        }
+        catch
+        {
+            // if update failed, delete newly uploaded image
+            if (newImageUrl is not null)
+            {
+                await _imageStorage.DeleteAsync(newImageUrl, cancellationToken);
+            }
+            throw;
+        }
     }
 
     [HttpDelete("{id:int}")]
