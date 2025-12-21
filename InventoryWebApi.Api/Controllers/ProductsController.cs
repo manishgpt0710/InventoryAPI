@@ -11,16 +11,16 @@ namespace InventoryWebApi.Api.Controllers;
 public class ProductsController : ControllerBase
 {
     private readonly IGenericService<Product> _genericService;
-    private readonly IGenericService<ProductImage> _productImageService;
     private readonly IImageStorage _imageStorage;
+    private readonly ILogger<ProductsController> _logger;
 
     public ProductsController(IGenericService<Product> genericService,
-        IGenericService<ProductImage> productImageService, 
-        IImageStorage imageStorage)
+        IImageStorage imageStorage,
+        ILogger<ProductsController> logger)
     {
         _genericService = genericService;
-        _productImageService = productImageService;
         _imageStorage = imageStorage;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -46,6 +46,9 @@ public class ProductsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Product>> Create([FromForm] ProductCreateDto dto, CancellationToken cancellationToken)
     {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
         string? imageUrl = null;
         var product = new Product
         {
@@ -70,7 +73,6 @@ public class ProductsController : ControllerBase
                 IsPrimary = true,
                 SortOrder = 0
             });
-            await _productImageService.CreateAsync(product.Images.First(), cancellationToken);
         }
 
         try
@@ -83,7 +85,14 @@ public class ProductsController : ControllerBase
             // rollback uploaded file if persistence failed
             if (imageUrl is not null)
             {
-                await _imageStorage.DeleteAsync(imageUrl, cancellationToken);
+                try
+                {
+                    await _imageStorage.DeleteAsync(imageUrl, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to rollback uploaded image at {ImageUrl}", imageUrl);
+                }
             }
             throw;
         }
@@ -97,11 +106,13 @@ public class ProductsController : ControllerBase
             return BadRequest("Route id and body ProductId must match.");
         }
 
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
         var existing = await _genericService.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             return NotFound();
-
         }
 
         string? newImageUrl = null;
@@ -110,12 +121,12 @@ public class ProductsController : ControllerBase
         if (dto.ImageFile is not null)
         {
             newImageUrl = await _imageStorage.UploadAsync(dto.ImageFile, "products", cancellationToken);
-            // unset existing primary
+
+            // unset existing primary in-memory; persist with product update
             var existingPrimary = existing.Images.FirstOrDefault(i => i.IsPrimary);
             if (existingPrimary is not null)
             {
                 existingPrimary.IsPrimary = false;
-                await _productImageService.UpdateAsync(existingPrimary, cancellationToken);
             }
 
             existing.Images.Add(new ProductImage
@@ -124,7 +135,6 @@ public class ProductsController : ControllerBase
                 IsPrimary = true,
                 SortOrder = 0
             });
-            await _productImageService.UpdateAsync(existing.Images.First(), cancellationToken);
         }
 
         existing.SkuId = dto.SkuId;
@@ -145,7 +155,14 @@ public class ProductsController : ControllerBase
             if (newImageUrl is not null && !string.IsNullOrEmpty(oldImageUrl))
             {
                 // delete old image after successful DB update
-                await _imageStorage.DeleteAsync(oldImageUrl, cancellationToken);
+                try
+                {
+                    await _imageStorage.DeleteAsync(oldImageUrl, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete old image at {OldImageUrl}", oldImageUrl);
+                }
             }
 
             return NoContent();
@@ -155,7 +172,14 @@ public class ProductsController : ControllerBase
             // if update failed, delete newly uploaded image
             if (newImageUrl is not null)
             {
-                await _imageStorage.DeleteAsync(newImageUrl, cancellationToken);
+                try
+                {
+                    await _imageStorage.DeleteAsync(newImageUrl, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to rollback newly uploaded image at {NewImageUrl}", newImageUrl);
+                }
             }
             throw;
         }
@@ -170,7 +194,26 @@ public class ProductsController : ControllerBase
             return NotFound();
         }
 
+        // collect image urls to delete after successful DB removal
+        var imageUrls = existing.Images
+            .Where(i => !string.IsNullOrEmpty(i.ImageUrl))
+            .Select(i => i.ImageUrl!)
+            .ToList();
+
         await _genericService.DeleteAsync(id, cancellationToken);
+
+        // attempt to delete images from storage; log failures but don't fail the request
+        foreach (var url in imageUrls)
+        {
+            try
+            {
+                await _imageStorage.DeleteAsync(url, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete image at {ImageUrl} after product deletion", url);
+            }
+        }
 
         return NoContent();
     }

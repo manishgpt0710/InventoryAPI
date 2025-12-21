@@ -1,5 +1,6 @@
 using InventoryWebApi.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection;
 
 namespace InventoryWebApi.Infrastructure.Persistence;
 
@@ -33,7 +34,11 @@ public class ApplicationDbContext : DbContext
     {
         var utcNow = DateTime.UtcNow;
 
-        foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
+        var entries = ChangeTracker
+            .Entries<AuditableEntity>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified);
+
+        foreach (var entry in entries)
         {
             switch (entry.State)
             {
@@ -56,12 +61,19 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Configure audit properties for all entities that inherit from AuditableEntity
-        ConfigureAuditableEntity<Product>(modelBuilder);
-        ConfigureAuditableEntity<Warehouse>(modelBuilder);
-        ConfigureAuditableEntity<WarehouseInventory>(modelBuilder);
-        ConfigureAuditableEntity<LookupGroup>(modelBuilder);
-        ConfigureAuditableEntity<LookupItem>(modelBuilder);
+        // Automatically configure audit properties for all AuditableEntity-derived types in the assembly
+        var auditableTypes = Assembly.GetAssembly(typeof(ApplicationDbContext))!
+            .GetTypes()
+            .Where(t => !t.IsAbstract && typeof(AuditableEntity).IsAssignableFrom(t));
+
+        var configureMethod = typeof(ApplicationDbContext)
+            .GetMethod(nameof(ConfigureAuditableEntity), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        foreach (var type in auditableTypes)
+        {
+            var generic = configureMethod.MakeGenericMethod(type);
+            generic.Invoke(null, new object[] { modelBuilder });
+        }
 
         ConfigureProduct(modelBuilder);
         ConfigureWarehouse(modelBuilder);
@@ -109,6 +121,10 @@ public class ApplicationDbContext : DbContext
             .HasMaxLength(200)
             .IsRequired();
 
+        entity.Property(x => x.ShortDescription)
+            .HasMaxLength(1000)
+            .IsRequired();
+
         entity.Property(x => x.Category)
             .HasMaxLength(200);
 
@@ -120,6 +136,13 @@ public class ApplicationDbContext : DbContext
 
         entity.Property(x => x.ProductMetadata)
             .HasColumnType("nvarchar(max)");
+
+        // Navigation: product images
+        entity.HasMany(x => x.Images)
+            .WithOne(i => i.Product)
+            .HasForeignKey(i => i.ProductId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
 
         entity.Property(x => x.IsBundled)
             .HasDefaultValue(false);
